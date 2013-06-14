@@ -22,6 +22,7 @@
                '("marmalade" . "http://marmalade-repo.org/packages/") t)
   (add-to-list 'package-archives
                '("melpa" . "http://melpa.milkbox.net/packages/") t)
+  (add-to-list 'package-archives '("org" . "http://orgmode.org/elpa/") t)
   (package-initialize))
 
 ;; For shorter keybindings
@@ -43,6 +44,7 @@
 
 (tool-bar-mode           0)
 (blink-cursor-mode       0)
+(transient-mark-mode     0)
 (auto-compression-mode   1)
 (auto-image-file-mode    1)
 (show-paren-mode         1)
@@ -174,13 +176,17 @@
       (global-set-key [(meta kp-8)]     'buffer-stack-untrack)
       (global-set-key [(meta kp-up)]    'buffer-stack-untrack)
       (defvar buffer-stack-mode)
-      (defun buffer-op-by-mode (op mode)
+      (defun buffer-op-by-mode (op &optional mode)
         (let ((buffer-stack-filter 'buffer-stack-filter-by-mode)
-              (buffer-stack-mode mode))
+              (buffer-stack-mode (or mode major-mode)))
           (funcall op)))
       (defun buffer-stack-filter-by-mode (buffer)
         (with-current-buffer buffer
           (equal major-mode buffer-stack-mode)))
+      (global-set-key [(meta kp-7)]
+                      (command (buffer-op-by-mode 'buffer-stack-up)))
+      (global-set-key [(meta kp-9)]
+                      (command (buffer-op-by-mode 'buffer-stack-down)))
       (global-set-key [(meta kp-3)]
                       (command (buffer-op-by-mode 'buffer-stack-down 'dired-mode)))
       (global-set-key [(meta kp-1)]
@@ -340,8 +346,9 @@
   (define-key compare-map "d" 'diff)
   (define-key compare-map "w" 'compare-windows))
 
-(setq ediff-window-setup-function  'ediff-setup-windows-plain
-      ediff-diff-options           " -bB ")
+(setq ediff-window-setup-function 'ediff-setup-windows-plain
+      ediff-split-window-function 'split-window-horizontally
+      ediff-diff-options          " -bB ")
 
 (setq-default ediff-ignore-similar-regions t)
 
@@ -466,6 +473,10 @@
 (run-with-idle-timer 5 nil (lambda ()
                              (require 'server)
                              (or (server-running-p) (server-start))))
+
+(run-with-idle-timer 15 nil (lambda ()
+                              (when (require 'edit-server nil t)
+                                (edit-server-start))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -735,10 +746,22 @@
 (eval-after-load "help-mode"
   '(define-key help-mode-map [backspace] 'help-go-back))
 
+(eval-after-load "comint"
+  '(defadvice comint-previous-input (around move-free (arg) activate)
+     "No more 'Not at command line'"
+     (if (comint-after-pmark-p)
+         ad-do-it
+       (backward-paragraph arg))))
+
 (setq Man-notify-method `pushy)
 
 (add-hook 'latex-mode-hook (lambda () (setq fill-column 100)))
 (add-hook 'elisp-mode-hook (lambda () (setq fill-column 75)))
+
+(require 'sr-speedbar)
+(setq sr-speedbar-right-side nil)
+(global-set-key [(super a)] 'sr-speedbar-toggle)
+
 
 (run-with-idle-timer 10 nil (lambda ()
                               (require 'midnight)
