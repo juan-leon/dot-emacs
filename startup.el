@@ -43,38 +43,42 @@
                               (tool-bar-lines . 0))))
 
 (tool-bar-mode           0)
+(menu-bar-mode           0)
 (blink-cursor-mode       0)
 (transient-mark-mode     0)
-(auto-compression-mode   1)
+(column-number-mode      1)
 (auto-image-file-mode    1)
 (show-paren-mode         1)
 (size-indication-mode    1)
 (file-name-shadow-mode   1)
 (temp-buffer-resize-mode 1)
 
-(defvar toggle-theme-state nil)
+(defvar leon-light-theme 'sanityinc-solarized-light)
+(defvar leon-dark-theme  'sanityinc-solarized-dark)
+
+(load-theme leon-light-theme t)
+(run-with-idle-timer 3 nil (lambda ()
+                             (load-theme leon-dark-theme t t)))
 (defun toggle-theme ()
   "Toggle dark/light theme"
   (interactive)
-  (if (setq toggle-theme-state (not toggle-theme-state))
-      (color-theme-sanityinc-solarized-light)
-    (color-theme-sanityinc-solarized-dark)))
+  (let* ((b-color (frame-parameter nil 'background-color))
+         (d-light (color-distance "white" b-color))
+         (d-dark  (color-distance "black" b-color)))
+  (if (> d-light d-dark)
+      (enable-theme leon-light-theme)
+    (enable-theme leon-dark-theme))))
 
-(toggle-theme)
 (global-set-key [(control ~)] 'toggle-theme)
 
 (setq font-lock-support-mode 'jit-lock-mode
       jit-lock-stealth-time 5
       jit-lock-stealth-nice 0.25)
 
-(setq indicate-buffer-boundaries t)
-
 (defadvice x-set-selection (after replicate-selection (type data) activate)
   "Different applications use different data sources"
   (if (equal type 'CLIPBOARD)
       (x-set-selection 'PRIMARY data)))
-
-
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -113,6 +117,7 @@
 ;; Files again (fast bookmarks)
 (global-set-key [(control meta ?1)] (command (find-file (env-dir "emacs/config"))))
 (global-set-key [(control meta ?2)] (command (find-file "~/repos")))
+(global-set-key [(control meta ?3)] (command (find-file "~/Dropbox/org")))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -204,7 +209,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;
-;;;; Prog modes (C/C++/Java/python/...)
+;;;; Prog modes (C/C++/Java/python/shell/...)
 
 (eval-after-load "cc-mode"
   '(progn
@@ -250,6 +255,16 @@
 (global-set-key [(control kp-f3)]       'ff-find-other-file)
 (global-set-key [(super ?+)]            'imenu-add-menubar-index)
 
+(add-hook 'after-save-hook 'executable-make-buffer-file-executable-if-script-p)
+
+;; Most of the times I don't use rope
+(defun use-ropemacs ()
+  (interactive)
+  (add-to-list 'load-path "/usr/share/emacs/site-lisp/pymacs")
+  (require 'pymacs)
+  (pymacs-load "ropemacs" "rope-")
+  (setq ropemacs-confirm-saving 'nil))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;
@@ -294,7 +309,8 @@
 (global-set-key [(super meta f7)] 'previous-error-no-select)
 (global-set-key [(super meta f8)] 'next-error-no-select)
 
-(setq next-error-highlight-no-select 2.0
+(setq compilation-scroll-output t
+      next-error-highlight-no-select 2.0
       next-error-highlight 'fringe-arrow)
 
 
@@ -434,6 +450,7 @@
 (add-hook 'text-mode-hook
           (lambda ()
             (auto-fill-mode 1)
+            (flyspell-mode 1)
             (setq tab-width 4)))
 
 
@@ -441,13 +458,13 @@
 ;;;;
 ;;;; General purpose variables
 
-(setq column-number-mode           t
-      confirm-kill-emacs           'y-or-n-p ; "Fast fingers protection"
+(setq confirm-kill-emacs           'y-or-n-p ; "Fast fingers protection"
       major-mode                   'text-mode
       enable-local-eval            'query
       garbage-collection-messages  t
       x-select-enable-clipboard    t
       inhibit-startup-message      t
+      initial-scratch-message      nil
       message-log-max              2500
       large-file-warning-threshold 2000000
       undo-ask-before-discard      nil
@@ -472,11 +489,37 @@
 
 (run-with-idle-timer 5 nil (lambda ()
                              (require 'server)
-                             (or (server-running-p) (server-start))))
+                             (unless (server-running-p)
+                               (server-start)
+                               (add-hook 'server-visit-hook
+                                         (lambda ()
+                                           (if (eq major-mode 'fundamental-mode)
+                                               (flyspell-mode 1)))))))
 
 (run-with-idle-timer 15 nil (lambda ()
                               (when (require 'edit-server nil t)
-                                (edit-server-start))))
+                                (edit-server-start)
+                                (define-key edit-server-edit-mode-map
+                                  [(meta return)]
+                                  (command (insert "<br>")
+                                           (newline))))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;
+;;;; Spell
+
+(defvar leon-main-dictionary      "english")
+(defvar leon-secondary-dictionary "castellano8")
+
+(setq ispell-dictionary     leon-main-dictionary
+      ispell-silently-savep t)
+
+(global-set-key [(super ?9)]
+                (command
+                 (if (equal ispell-local-dictionary leon-main-dictionary)
+                     (ispell-change-dictionary leon-secondary-dictionary)
+                   (ispell-change-dictionary leon-main-dictionary))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -616,6 +659,9 @@
 (global-set-key [(super f)]        'auto-fill-mode)
 
 (global-set-key [(control backspace)] (command (kill-line 0)))
+(global-set-key [(control f10)] 
+                (command (menu-bar-mode (if menu-bar-mode 0 1))))
+
 
 (when (require 'subword nil t)
   (global-set-key [(meta left)]  'subword-backward)
@@ -648,6 +694,20 @@
          (concat "/sudo:root@localhost:" buffer-file-name)))))
 
 (global-set-key [(control ?x) (control ?r)] 'sudo-powerup)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;
+;;;; org-mode
+
+(global-set-key [(control c) ?l] 'org-store-link)
+(global-set-key [(control c) ?a] 'org-agenda)
+(global-set-key [(super o)] 'org-iswitchb)
+
+(setq org-completion-use-ido t
+      org-log-done t)
+
+(setq org-agenda-files '("~/Dropbox/org/"))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -760,11 +820,10 @@
 
 (require 'sr-speedbar)
 (setq sr-speedbar-right-side nil)
-(global-set-key [(super a)] 'sr-speedbar-toggle)
+(global-set-key [(super s)] 'sr-speedbar-toggle)
 
 
 (run-with-idle-timer 10 nil (lambda ()
                               (require 'midnight)
                               (setq clean-buffer-list-delay-general 3)
                               (midnight-delay-set 'midnight-delay "1:10pm")))
-
