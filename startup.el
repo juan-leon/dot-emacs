@@ -213,19 +213,25 @@
 
 (eval-after-load "cc-mode"
   '(progn
-     (defun leon-c-mode-setup()
+     (defun leon-c-mode-setup ()
        (setq indicate-empty-lines t)
        (c-toggle-electric-state t)
        (c-toggle-hungry-state t)
        (setq ff-search-directories '("." "include" "../include")))
      (add-hook 'c-mode-common-hook 'leon-c-mode-setup)
      (add-hook 'java-mode-hook (lambda ()
+                                 (local-set-key [(f)] 'leon-javadoc)
                                  (setq c-basic-offset 4
                                        tab-width 4
                                        indent-tabs-mode t)))
      (when (require 'xcscope nil t)
        (add-hook 'c-mode-hook   'cscope-minor-mode)
        (add-hook 'c++-mode-hook 'cscope-minor-mode))
+     (when (require 'ctags nil t)
+       (setq tags-revert-without-query t)
+       (global-set-key [(super f12)] 'ctags-create-or-update-tags-table)
+       (setq ctags-command
+             "find . -name  '*.[ch]' -o -name '*.java' -o -name '*.el' -o -name '*.py' | xargs etags"))
      (c-set-offset 'substatement-open 0)))
 
 
@@ -238,6 +244,19 @@
                               nil '(("\\(\\<\\|_\\)\\(FIXME\\|TODO\\|HACK\\)"
                                      2 font-lock-warning-face t)
                                     ("[{}]" 0 'font-lock-warning-face)))))
+
+(defun leon-javadoc ()
+  (interactive)
+  (let ((class (word-at-point)))
+    (save-excursion
+      (save-restriction
+        (goto-char (point-min))
+        (if (re-search-forward (concat "^import\s+\\(.*" class  "\\);$") nil t)
+            (let ((url (concat "http://www.google.es/search?q=javadoc+"
+                               (match-string 1)
+                               "+overview+frames&btnI=")))
+              (browse-url url))
+          (message "No class at point"))))))
 
 (defun indent-by-shell-command ()
   (interactive)
@@ -332,8 +351,7 @@
      (defun leon-gud-hook()
        (setq comint-input-ring-file-name (env-dir "history/gud_history"))
        (comint-read-input-ring t)
-       (make-local-variable 'kill-buffer-hook)
-       (add-hook 'kill-buffer-hook 'comint-write-input-ring)
+       (add-hook 'kill-buffer-hook 'comint-write-input-ring nil t)
        (gud-def leon-gud-print      "print %e"   nil)
        (gud-def leon-gud-print-ref  "print * %e" nil)
        (gud-def leon-gud-next       "next"       nil)
@@ -376,11 +394,11 @@
 
 (eval-after-load "dired"
   '(progn
-     (defun leon-dired-hide-hidden()
+     (defun leon-dired-hide-hidden ()
        (interactive)
        (let ((dired-actual-switches "-l"))
          (revert-buffer)))
-     (defun leon-dired-parent-directory()
+     (defun leon-dired-parent-directory ()
        (interactive)
        (dired (concat (dired-current-directory) "..")))
      (setq dired-copy-preserve-time nil
@@ -450,7 +468,9 @@
 (add-hook 'text-mode-hook
           (lambda ()
             (auto-fill-mode 1)
-            (flyspell-mode 1)
+            ;; Hook is run by "child" modes
+            (if (eq major-mode 'text-mode)
+                (flyspell-mode 1))
             (setq tab-width 4)))
 
 
@@ -458,21 +478,22 @@
 ;;;;
 ;;;; General purpose variables
 
-(setq confirm-kill-emacs           'y-or-n-p ; "Fast fingers protection"
-      major-mode                   'text-mode
-      enable-local-eval            'query
+(setq browse-url-browser-function 'browse-url-chromium
+      confirm-kill-emacs           'y-or-n-p ; "Fast fingers protection"
+      disabled-command-function    nil ; Warnings already read
       garbage-collection-messages  t
-      x-select-enable-clipboard    t
       inhibit-startup-message      t
       initial-scratch-message      nil
-      message-log-max              2500
-      large-file-warning-threshold 2000000
-      undo-ask-before-discard      nil
-      track-eol                    t
-      whitespace-line-column       100
       kill-do-not-save-duplicates  t
-      disabled-command-function    nil ; Warnings already read
-      visible-bell                 t)
+      large-file-warning-threshold 2000000
+      major-mode                   'text-mode
+      message-log-max              2500
+      text-scale-mode-step         1.1
+      track-eol                    t
+      undo-ask-before-discard      nil
+      visible-bell                 t
+      whitespace-line-column       100
+      x-select-enable-clipboard    t)
 
 (setq-default indent-tabs-mode nil
               tab-width        2
@@ -517,7 +538,7 @@
 
 (global-set-key [(super ?9)]
                 (command
-                 (if (equal ispell-local-dictionary leon-main-dictionary)
+                 (if (not (equal ispell-local-dictionary leon-secondary-dictionary))
                      (ispell-change-dictionary leon-secondary-dictionary)
                    (ispell-change-dictionary leon-main-dictionary))))
 
@@ -714,14 +735,26 @@
 ;;;;
 ;;;; SQL stuff
 
-(setq sql-database             "nprobe"
-      sql-server               "localhost"
-      sql-user                 "root"
-      sql-input-ring-file-name (env-dir "history/sql_history"))
+(eval-after-load "sql"
+  '(progn
+     (setq sql-connection-alist
+           '(("events"
+              (sql-product  'mysql)
+              (sql-database "events")
+              (sql-server   "squid1")
+              (sql-user     "events")
+              (sql-password "events"))
+             ("flows"
+              (sql-product  'mysql)
+              (sql-database "flows")
+              (sql-server   "collector1")
+              (sql-user     "glass")
+              (sql-password "glass")))
+           sql-input-ring-file-name (env-dir "history/sql_history"))
+     (add-hook 'sql-interactive-mode-hook 'comint-write-input-ring nil t)
+     (add-to-list 'same-window-buffer-names "*SQL*")))
 
-(add-to-list 'same-window-buffer-names "*SQL*")
-
-(global-set-key [(meta f4)] 'sql-mysql)
+(global-set-key [(meta f4)] 'sql-connect)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -827,3 +860,4 @@
                               (require 'midnight)
                               (setq clean-buffer-list-delay-general 3)
                               (midnight-delay-set 'midnight-delay "1:10pm")))
+
