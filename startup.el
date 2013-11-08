@@ -14,8 +14,7 @@
 
 (add-to-list 'load-path (env-dir "emacs/packages"))
 (add-to-list 'load-path "/usr/share/git-core/emacs")
-(and (file-exists-p (env-dir "emacs/config/custom.el"))
-     (load-file (setq custom-file (env-dir "emacs/config/custom.el"))))
+(load (setq custom-file (env-dir "emacs/config/custom.el")) 'noerror)
 
 (when (require 'package nil t)
   (add-to-list 'package-archives
@@ -37,7 +36,7 @@
 
 (when (display-graphic-p)
   (set-face-attribute 'default nil :font "DejaVu Sans Mono" :height 98)
-  (setq frame-title-format '(buffer-file-name " %f" " %b")
+  (setq frame-title-format '(buffer-file-name "%f" "%b")
         default-frame-alist '((width . 160)
                               (height . 58)
                               (tool-bar-lines . 0))))
@@ -65,14 +64,13 @@
   (let* ((b-color (frame-parameter nil 'background-color))
          (d-light (color-distance "white" b-color))
          (d-dark  (color-distance "black" b-color)))
-  (if (> d-light d-dark)
-      (enable-theme leon-light-theme)
-    (enable-theme leon-dark-theme))))
+    (if (> d-light d-dark)
+        (enable-theme leon-light-theme)
+      (enable-theme leon-dark-theme))))
 
 (global-set-key [(control ~)] 'toggle-theme)
 
-(setq font-lock-support-mode 'jit-lock-mode
-      jit-lock-stealth-time 5
+(setq jit-lock-stealth-time 5
       jit-lock-stealth-nice 0.25)
 
 (defadvice x-set-selection (after replicate-selection (type data) activate)
@@ -118,6 +116,7 @@
 (global-set-key [(control meta ?1)] (command (find-file (env-dir "emacs/config"))))
 (global-set-key [(control meta ?2)] (command (find-file "~/repos")))
 (global-set-key [(control meta ?3)] (command (find-file "~/Dropbox/org")))
+(global-set-key [(control meta ?4)] (command (find-file "/var/log/")))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -138,14 +137,14 @@
 (defun toggle-split ()
   "Toggle vertical/horizontal window split."
   (interactive)
-  (let ((buff-B (window-buffer (next-window)))
+  (let ((buff-b (window-buffer (next-window)))
         (height (window-body-height))
         (width  (window-body-width)))
     (delete-other-windows)
     (if (> height (/ width 5))
         (split-window-vertically)
       (split-window-horizontally))
-    (set-window-buffer (next-window) buff-B)))
+    (set-window-buffer (next-window) buff-b)))
 
 (global-set-key [(control pause)] 'toggle-split)
 (global-set-key [(pause)] 'delete-other-windows)
@@ -197,10 +196,10 @@
       (global-set-key [(meta kp-1)]
                       (command (buffer-op-by-mode 'buffer-stack-up 'dired-mode))))
   (progn
-   (global-set-key [(meta kp-4)]     'bury-buffer)
-   (global-set-key [(meta kp-6)]     'bury-buffer)
-   (global-set-key [(meta kp-left)]  'bury-buffer)
-   (global-set-key [(meta kp-right)] 'bury-buffer)))
+    (global-set-key [(meta kp-4)]     'bury-buffer)
+    (global-set-key [(meta kp-6)]     'bury-buffer)
+    (global-set-key [(meta kp-left)]  'bury-buffer)
+    (global-set-key [(meta kp-right)] 'bury-buffer)))
 
 ;; Better names for dups
 (require 'uniquify)
@@ -220,7 +219,7 @@
        (setq ff-search-directories '("." "include" "../include")))
      (add-hook 'c-mode-common-hook 'leon-c-mode-setup)
      (add-hook 'java-mode-hook (lambda ()
-                                 (local-set-key [(f)] 'leon-javadoc)
+                                 (local-set-key [(f12)] 'leon-javadoc)
                                  (setq c-basic-offset 4
                                        tab-width 4
                                        indent-tabs-mode t)))
@@ -232,6 +231,9 @@
        (global-set-key [(super f12)] 'ctags-create-or-update-tags-table)
        (setq ctags-command
              "find . -name  '*.[ch]' -o -name '*.java' -o -name '*.el' -o -name '*.py' | xargs etags"))
+     (when (require 'etags-table nil t)
+       (setq etags-table-search-up-depth 20))
+     (c-set-offset 'case-label '+)
      (c-set-offset 'substatement-open 0)))
 
 
@@ -247,16 +249,26 @@
 
 (defun leon-javadoc ()
   (interactive)
-  (let ((class (word-at-point)))
+  (let ((class (thing-at-point 'word)))
     (save-excursion
       (save-restriction
         (goto-char (point-min))
-        (if (re-search-forward (concat "^import\s+\\(.*" class  "\\);$") nil t)
+        (if (re-search-forward (concat "^import\s+\\(.*\\." class  "\\);$") nil t)
             (let ((url (concat "http://www.google.es/search?q=javadoc+"
                                (match-string 1)
                                "+overview+frames&btnI=")))
               (browse-url url))
           (message "No class at point"))))))
+
+(defun code-full-cleanup ()
+  (interactive)
+  (save-excursion
+    (goto-char (point-min))
+    (whitespace-cleanup)
+    (if (not indent-tabs-mode)
+        (while (re-search-forward "\t" nil t)
+          (replace-match (make-string 2 ? ) nil nil)))
+    (indent-region (point-min) (point-max))))
 
 (defun indent-by-shell-command ()
   (interactive)
@@ -271,7 +283,7 @@
       (forward-line (1- line)))))
 
 (global-set-key [(control meta return)] 'ff-find-other-file)
-(global-set-key [(control kp-f3)]       'ff-find-other-file)
+(global-set-key [(control f3)   ]       'ff-find-other-file)
 (global-set-key [(super ?+)]            'imenu-add-menubar-index)
 
 (add-hook 'after-save-hook 'executable-make-buffer-file-executable-if-script-p)
@@ -303,7 +315,7 @@
                            (holiday-fixed 10 12 "National Day")
                            (holiday-fixed 12 6  "Constitution")
                            (holiday-fixed 12 25 "Christmas"))
-                         ;, This year
+                         ;; This year
                          '((holiday-fixed 1 7   "Traslado R. Magos")
                            (holiday-fixed 3 18  "S. Jose")
                            (holiday-fixed 8 15  "Asuncion")
@@ -398,26 +410,22 @@
        (interactive)
        (let ((dired-actual-switches "-l"))
          (revert-buffer)))
-     (defun leon-dired-parent-directory ()
-       (interactive)
-       (dired (concat (dired-current-directory) "..")))
      (setq dired-copy-preserve-time nil
            dired-recursive-copies   'always)
      (autoload 'dired-efap "dired-efap")
      (autoload 'dired-efap-click "dired-efap")
+     (setq dired-listing-switches "--group-directories-first -al")
      (define-key dired-mode-map [?r] 'wdired-change-to-wdired-mode)
      (define-key dired-mode-map [?U] 'dired-unmark-backward)
      (define-key dired-mode-map [?a] 'leon-dired-hide-hidden)
      (define-key dired-mode-map [f2] 'dired-efap)
      (define-key dired-mode-map [down-mouse-1] 'dired-efap-click)
      (define-key dired-mode-map [(control return)] 'dired-find-alternate-file)
-     (define-key dired-mode-map [(backspace)] 'leon-dired-parent-directory)
+     (define-key dired-mode-map [(backspace)] 'dired-jump)
      (define-key dired-mode-map [(control backspace)] 'dired-unmark-backward)
      (require 'dired-x)))
 
-(add-hook 'dired-mode-hook
-          (lambda ()
-            (dired-omit-mode 1)))
+(add-hook 'dired-mode-hook 'dired-omit-mode)
 
 (add-hook 'dired-after-readin-hook
           (lambda ()
@@ -478,14 +486,14 @@
 ;;;;
 ;;;; General purpose variables
 
-(setq browse-url-browser-function 'browse-url-chromium
+(setq align-to-tab-stop            nil
+      browse-url-browser-function  'browse-url-chromium
       confirm-kill-emacs           'y-or-n-p ; "Fast fingers protection"
       disabled-command-function    nil ; Warnings already read
       garbage-collection-messages  t
       inhibit-startup-message      t
       initial-scratch-message      nil
       kill-do-not-save-duplicates  t
-      large-file-warning-threshold 2000000
       major-mode                   'text-mode
       message-log-max              2500
       text-scale-mode-step         1.1
@@ -496,7 +504,7 @@
       x-select-enable-clipboard    t)
 
 (setq-default indent-tabs-mode nil
-              tab-width        2
+              tab-width        4
               fill-column      80
               truncate-lines   t)
 
@@ -601,8 +609,6 @@
 (set-default 'search-ring-update t)
 
 (define-key isearch-mode-map [(control t)]    'isearch-toggle-case-fold)
-(define-key isearch-mode-map [(control y)]    'isearch-yank-kill)
-(define-key isearch-mode-map [(control w)]    'isearch-yank-word)
 (define-key isearch-mode-map [(control up)]   'isearch-ring-retreat)
 (define-key isearch-mode-map [(control down)] 'isearch-ring-advance)
 
@@ -620,6 +626,14 @@
 (global-set-key [(super l)] 'locate)
 (global-set-key [(super L)] 'locate-with-filter)
 
+;; In files
+(global-set-key [(super g)] 'grep)
+(global-set-key [(super i)] 'rgrep)
+
+(eval-after-load "grep"
+  '(progn
+     (setq grep-find-ignored-directories '(".svn" ".git" ".hg" ".bzr" "target"))
+     (add-to-list 'grep-find-ignored-files "TAGS")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;
@@ -634,7 +648,7 @@
      (defun shell-rename()
        (interactive)
        (if (eq major-mode 'shell-mode)
-             (rename-buffer "shell" t)))
+           (rename-buffer "shell" t)))
      (global-set-key            [(super z)]               'shell)
      (global-set-key            [(control x) (control z)] 'shell)
      (define-key shell-mode-map [(meta kp-up)]            'shell-rename)
@@ -651,6 +665,15 @@
 (autoload 'egit           "egit" "Emacs git history" t)
 (autoload 'egit-file      "egit" "Emacs git history file" t)
 (autoload 'egit-dir       "egit" "Emacs git history directory" t)
+
+(eval-after-load "magit"
+  '(progn
+     (setq magit-gitk-executable "gitg"
+           magit-save-some-buffers nil)
+     (add-hook 'magit-log-edit-mode-hook
+               (lambda ()
+                 (flyspell-mode 1)
+                 (setq fill-column 70)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -677,17 +700,17 @@
 (global-set-key [(meta return)]    'find-tag)
 (global-set-key [(control ?,)]     'list-tags)
 (global-set-key [(control ?.)]     'tags-apropos)
+(global-set-key [(super f2)]       'toggle-truncate-lines)
 (global-set-key [(super f)]        'auto-fill-mode)
+(global-set-key [(menu)]           'menu-bar-open)
 
 (global-set-key [(control backspace)] (command (kill-line 0)))
-(global-set-key [(control f10)] 
+(global-set-key [(control menu)]
                 (command (menu-bar-mode (if menu-bar-mode 0 1))))
-
 
 (when (require 'subword nil t)
   (global-set-key [(meta left)]  'subword-backward)
   (global-set-key [(meta right)] 'subword-forward))
-
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -725,10 +748,12 @@
 (global-set-key [(control c) ?a] 'org-agenda)
 (global-set-key [(super o)] 'org-iswitchb)
 
-(setq org-completion-use-ido t
-      org-log-done t)
-
-(setq org-agenda-files '("~/Dropbox/org/"))
+(eval-after-load "org"
+  '(progn
+     (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1)))
+     (setq org-agenda-files '("~/Dropbox/org/"))
+     (setq org-completion-use-ido t
+           org-log-done t)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -744,6 +769,12 @@
               (sql-server   "squid1")
               (sql-user     "events")
               (sql-password "events"))
+             ("users"
+              (sql-product  'mysql)
+              (sql-database "users")
+              (sql-server   "localhost")
+              (sql-user     "users")
+              (sql-password "users"))
              ("flows"
               (sql-product  'mysql)
               (sql-database "flows")
@@ -797,7 +828,7 @@
   (interactive)
   (let ((pos (point)))
     (if (eq (get-text-property pos 'face) 'font-lock-function-name-face)
-      (setq pos (or (next-property-change pos) (point-max))))
+        (setq pos (or (next-property-change pos) (point-max))))
     (setq pos (text-property-any pos (point-max) 'face
                                  'font-lock-function-name-face))
     (if pos
@@ -809,7 +840,7 @@
   (interactive)
   (let ((pos (point)))
     (if (eq (get-text-property pos 'face) 'font-lock-function-name-face)
-      (setq pos (or (previous-property-change pos) (point-min))))
+        (setq pos (or (previous-property-change pos) (point-min))))
     (setq pos (previous-property-change pos))
     (while (and pos (not (eq (get-text-property pos 'face)
                              'font-lock-function-name-face)))
@@ -826,18 +857,11 @@
 (global-set-key [(control ?x) ?r ?u] 'gse-number-rectangle)
 
 
-;; Lines
-(defun leon-toggle-truncate-lines ()
-  (interactive)
-  (setq truncate-lines (not truncate-lines))
-  (redraw-frame (selected-frame))
-  (message (concat "truncate lines " (if truncate-lines "enabled" "disabled"))))
-
-(global-set-key [(super f2)] 'leon-toggle-truncate-lines)
-
-
 (eval-after-load "help-mode"
-  '(define-key help-mode-map [backspace] 'help-go-back))
+  '(progn
+     (define-key help-mode-map [backspace]    'help-go-back)
+     (define-key help-mode-map [(meta left)]  'help-go-back)
+     (define-key help-mode-map [(meta right)] 'help-go-forward)))
 
 (eval-after-load "comint"
   '(defadvice comint-previous-input (around move-free (arg) activate)
@@ -856,8 +880,54 @@
 (global-set-key [(super s)] 'sr-speedbar-toggle)
 
 
+(defun toggle-window-dedicated ()
+  "Toggle whether the current active window is dedicated or not"
+  (interactive)
+  (message "Window '%s' is %s" (current-buffer)
+           (if (let (window (get-buffer-window (current-buffer)))
+                 (set-window-dedicated-p window 
+                                         (not (window-dedicated-p window))))
+               "dedicated" "normal")))
+
+(global-set-key [(control kp-1)] 'toggle-window-dedicated)
+
+
 (run-with-idle-timer 10 nil (lambda ()
                               (require 'midnight)
                               (setq clean-buffer-list-delay-general 3)
                               (midnight-delay-set 'midnight-delay "1:10pm")))
 
+(add-to-list 'auto-mode-alist '("\\.pp\\'" . ruby-mode))
+
+(add-hook 'shell-mode-hook 
+          (lambda ()
+            (load-theme-buffer-local leon-dark-theme (current-buffer) t)))
+
+(setq nxml-child-indent tab-width)
+(setq-default ws-trim-level 1)
+(setq-default ws-trim-method-hook '(ws-trim-trailing))
+(global-ws-trim-mode 1)
+
+(defun region-len ()
+  (interactive)
+  (if (mark)
+      (message "Distance is %d " (abs (- (point) (mark))))))
+
+(global-set-key (kbd "M-x") 'smex)
+(global-set-key (kbd "M-X") 'smex-major-mode-commands)
+(eval-after-load "smex"
+  '(progn
+     ;; This is your old M-x.
+     (global-set-key (kbd "C-c C-c M-x") 'execute-extended-command)
+     (smex-auto-update 60)
+     (setq smex-key-advice-ignore-menu-bar nil)
+     (setq smex-flex-matching nil)))
+
+(defun close-frame (arg)
+  (interactive "P")
+  (if (= (length (frame-list)) 1)
+      (save-buffers-kill-emacs arg)
+    (delete-frame)))
+
+(global-set-key [(control ?x) (control ?c)] 'close-frame)
+(global-set-key [(control ?ç)] 'new-frame)
